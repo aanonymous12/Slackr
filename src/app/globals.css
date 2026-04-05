@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-workspace: #1a1d21;
+  --bg-sidebar: #222529;
+  --bg-main: #222529;
+  --bg-surface: #2c2f33;
+  --bg-hover: #36393f;
+  --accent: #4a90d9;
+  --accent-green: #2eb67d;
+  --accent-amber: #faa61a;
+  --accent-red: #ed4245;
+  --text-primary: #f2f3f5;
+  --text-secondary: #b9bbbe;
+  --text-muted: #72767d;
+  --border: #3f4348;
+  --mention: #ffd900;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg-workspace);
+  color: var(--text-primary);
+}
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.message-row:hover { background: rgba(255,255,255,0.03); border-radius: 6px; }
+.message-row .hover-actions { visibility: hidden; }
+.message-row:hover .hover-actions { visibility: visible; }
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slide-right { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+.animate-fade-in { animation: fade-in 0.15s ease; }
+.animate-slide-right { animation: slide-right 0.2s ease; }
+.mention-chip { color: var(--mention); background: rgba(255,217,0,0.1); border-radius: 3px; padding: 0 3px; }
+.mention-chip:hover { background: rgba(255,217,0,0.2); }
