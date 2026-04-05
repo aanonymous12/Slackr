@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Hash, Lock, Users, Pin, Search, Headphones, ChevronDown } from 'lucide-react'
+import { Hash, Lock, Users, Pin, Search, Trash2 } from 'lucide-react'
 import MessageList from './MessageList'
 import MessageComposer from './MessageComposer'
 import ThreadPanel from './ThreadPanel'
@@ -23,6 +23,20 @@ export default function ChannelView({ channel, initialMessages, channelMembers, 
   const [threadMessage, setThreadMessage] = useState<Record<string, unknown> | null>(null)
   const [huddle, setHuddle] = useState(activeHuddle)
   const [showMembers, setShowMembers] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDeleteChannel() {
+    if (!confirm(`Delete #${ch.name}? This cannot be undone.`)) return
+    setDeleting(true)
+    const res = await fetch('/api/channel/delete', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel_id: ch.id }),
+    })
+    const data = await res.json()
+    if (!res.ok) { alert(data.error || 'Failed to delete'); setDeleting(false); return }
+    window.location.href = `/workspace/${workspaceSlug}`
+  }
   const [typingUsers, setTypingUsers] = useState<string[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -189,6 +203,12 @@ export default function ChannelView({ channel, initialMessages, channelMembers, 
           <button style={hdrBtn}><Search size={16} /></button>
           <button style={hdrBtn}><Pin size={16} /></button>
           <button style={hdrBtn} onClick={() => setShowMembers(!showMembers)}><Users size={16} /></button>
+          {!['general','random'].includes(ch.name) && (
+            <button onClick={handleDeleteChannel} disabled={deleting} title="Delete channel"
+              style={{ ...hdrBtn, color: deleting ? '#72767d' : '#ed4245' }}>
+              <Trash2 size={16} />
+            </button>
+          )}
         </div>
       </div>
 
