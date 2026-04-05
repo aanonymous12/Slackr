@@ -55,4 +55,3 @@ Also add `http://localhost:3000` and `http://localhost:3000/auth/callback` to Su
 - **TypeScript** + Tailwind CSS
 - **Lucide React** icons
 - **Vercel** deployment
-# Slackr
