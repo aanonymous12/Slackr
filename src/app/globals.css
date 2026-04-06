@@ -17,24 +17,216 @@
   --text-muted: #72767d;
   --border: #3f4348;
   --mention: #ffd900;
+  --sidebar-width: 240px;
+  --workspace-bar-width: 68px;
 }
 
 * { box-sizing: border-box; }
-html, body { height: 100%; overflow: hidden; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  margin: 0; padding: 0;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   background: var(--bg-workspace);
   color: var(--text-primary);
+  font-size: 14px;
+  touch-action: manipulation;
 }
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
 .message-row:hover { background: rgba(255,255,255,0.03); border-radius: 6px; }
-.message-row .hover-actions { visibility: hidden; }
-.message-row:hover .hover-actions { visibility: visible; }
+.message-row .hover-actions { visibility: hidden; opacity: 0; transition: opacity .1s; }
+.message-row:hover .hover-actions { visibility: visible; opacity: 1; }
+
 @keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes slide-right { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+@keyframes spin { to { transform: rotate(360deg) } }
+
 .animate-fade-in { animation: fade-in 0.15s ease; }
 .animate-slide-right { animation: slide-right 0.2s ease; }
 .mention-chip { color: var(--mention); background: rgba(255,217,0,0.1); border-radius: 3px; padding: 0 3px; }
-.mention-chip:hover { background: rgba(255,217,0,0.2); }
+.mention-chip:hover { background: rgba(255,217,0,0.2); cursor: pointer; }
+
+/* ============================================================
+   MOBILE RESPONSIVE
+   ============================================================ */
+
+/* Mobile: sidebar overlay */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  z-index: 40;
+}
+
+/* Show/hide sidebar on mobile */
+.sidebar-mobile-open .sidebar-overlay { display: block; }
+.sidebar-mobile-open .app-sidebar {
+  transform: translateX(0) !important;
+}
+
+/* App layout */
+.app-layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app-workspace-bar {
+  width: var(--workspace-bar-width);
+  flex-shrink: 0;
+}
+
+.app-sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Mobile bottom nav bar */
+.mobile-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --workspace-bar-width: 0px;
+    --sidebar-width: 280px;
+  }
+
+  .app-workspace-bar {
+    display: none;
+  }
+
+  .app-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 50;
+    transform: translateX(-100%);
+  }
+
+  .app-main {
+    width: 100%;
+  }
+
+  .mobile-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: #222529;
+    border-top: 1px solid #3f4348;
+    z-index: 30;
+    align-items: stretch;
+  }
+
+  .mobile-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    color: #72767d;
+    cursor: pointer;
+    font-size: 10px;
+    font-family: inherit;
+    padding: 6px 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mobile-nav-btn.active { color: #4a90d9; }
+  .mobile-nav-btn svg { width: 20px; height: 20px; }
+
+  /* Make message area fill above bottom nav */
+  .app-main .channel-area { padding-bottom: 60px; }
+
+  /* Thread panel full screen on mobile */
+  .thread-panel-mobile {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    z-index: 60;
+  }
+
+  /* Composer mobile */
+  .message-composer {
+    position: sticky;
+    bottom: 60px;
+  }
+
+  /* Modals full screen on mobile */
+  .modal-fullscreen-mobile {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-radius: 16px 16px 0 0 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+  }
+
+  /* Task board mobile - single column */
+  .task-board-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Diagram page - add scroll */
+  .diagram-canvas {
+    overflow: auto !important;
+  }
+
+  /* Header compress */
+  .channel-header-right {
+    gap: 4px !important;
+  }
+  .channel-header-right .member-faces {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  body { font-size: 13px; }
+
+  .channel-header-right .huddle-btn span:last-child {
+    display: none;
+  }
+
+  /* Hide some header buttons on very small screens */
+  .channel-header-pin,
+  .channel-header-search {
+    display: none !important;
+  }
+}
+
+/* Prevent iOS zoom on input focus */
+@media (max-width: 768px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}

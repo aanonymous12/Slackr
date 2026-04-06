@@ -89,6 +89,18 @@ export default function TaskBoard({ workspaceId, currentUserId, members }: Props
     const data = await res.json()
     if (data.task) {
       setTasks(prev => [data.task, ...prev])
+      // Notify admins
+      const assigneeName = memberList.find(p => String(p.id) === form.assigned_to)
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'task',
+          workspace_id: workspaceId,
+          task_title: form.title.trim(),
+          task_assignee: assigneeName ? String(assigneeName.full_name || assigneeName.username || '') : null,
+        }),
+      }).catch(console.error)
       setForm({ title: '', description: '', priority: 'medium', due_date: '', assigned_to: '' })
       setShowAdd(false)
     }

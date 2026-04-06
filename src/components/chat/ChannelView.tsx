@@ -7,6 +7,7 @@ import MessageList from './MessageList'
 import MessageComposer from './MessageComposer'
 import ThreadPanel from './ThreadPanel'
 import HuddleBar from './HuddleBar'
+import VideoHuddle from '@/components/huddle/VideoHuddle'
 import TaskBoard from '@/components/tasks/TaskBoard'
 
 interface Props {
@@ -26,6 +27,7 @@ export default function ChannelView({ channel, initialMessages, channelMembers, 
   const [showMembers, setShowMembers] = useState(false)
   const [typingUsers, setTypingUsers] = useState<string[]>([])
   const [deleting, setDeleting] = useState(false)
+  const [showVideo, setShowVideo] = useState(false)
   const [activeTab, setActiveTab] = useState<'chat' | 'tasks'>('chat')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -100,6 +102,14 @@ export default function ChannelView({ channel, initialMessages, channelMembers, 
       content_type: fileData ? 'file' : 'text',
       file_url: fileData?.url, file_name: fileData?.name, file_size: fileData?.size,
     })
+    // Notify all members if this is announcements channel
+    if (ch.name === 'announcements') {
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'announcement', workspace_id: ch.workspace_id, channel_id: ch.id, message: content }),
+      }).catch(console.error)
+    }
   }
 
   async function startHuddle() {
@@ -127,6 +137,7 @@ export default function ChannelView({ channel, initialMessages, channelMembers, 
   const members = channelMembers as { profiles: Record<string, unknown> }[]
 
   return (
+    <>
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', background: '#222529' }}>
       {/* Channel Header */}
       <div style={{ padding: '12px 20px', borderBottom: '1px solid #2a2d31', display: 'flex', alignItems: 'center', gap: 12, background: '#222529', flexShrink: 0 }}>
@@ -168,10 +179,10 @@ export default function ChannelView({ channel, initialMessages, channelMembers, 
             </span>
           </div>
 
-          <button onClick={startHuddle}
-            style={{ background: huddle ? 'rgba(46,182,125,.15)' : '#2c2f33', border: `1px solid ${huddle ? '#2eb67d' : '#3f4348'}`, borderRadius: 20, padding: '5px 12px', color: huddle ? '#4ade80' : '#b9bbbe', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: huddle ? '#2eb67d' : '#72767d', display: 'inline-block' }} />
-            {huddle ? 'Active Huddle' : 'Start Huddle'}
+          <button onClick={() => setShowVideo(true)}
+            style={{ background: showVideo ? 'rgba(46,182,125,.15)' : '#2c2f33', border: `1px solid ${showVideo ? '#2eb67d' : '#3f4348'}`, borderRadius: 20, padding: '5px 12px', color: showVideo ? '#4ade80' : '#b9bbbe', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: showVideo ? '#2eb67d' : '#72767d', display: 'inline-block' }} />
+            {showVideo ? 'In Huddle' : 'Start Huddle'}
           </button>
 
           <button style={hdrBtn}><Search size={16} /></button>
@@ -264,6 +275,15 @@ export default function ChannelView({ channel, initialMessages, channelMembers, 
         )}
       </div>
     </div>
+    {showVideo && (
+      <VideoHuddle
+        channelId={ch.id}
+        channelName={ch.name}
+        currentUserId={currentUserId}
+        onClose={() => setShowVideo(false)}
+      />
+    )}
+    </>
   )
 }
 

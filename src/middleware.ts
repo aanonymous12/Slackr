@@ -21,11 +21,27 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
-
+  const { data: { user }, error } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
-  if (!user && !pathname.startsWith('/auth') && !pathname.startsWith('/invite')) {
+  // Check if session is expired (last sign-in > 24h for invite-joined users)
+  if (user && !error) {
+    const lastSignIn = user.last_sign_in_at
+    if (lastSignIn) {
+      const hoursSinceLogin = (Date.now() - new Date(lastSignIn).getTime()) / (1000 * 60 * 60)
+      const sessionDuration = Number(process.env.SESSION_DURATION_HOURS || 24)
+      if (hoursSinceLogin > sessionDuration && !pathname.startsWith('/auth')) {
+        // Sign out and redirect to login
+        await supabase.auth.signOut()
+        const url = request.nextUrl.clone()
+        url.pathname = '/auth/login'
+        url.searchParams.set('reason', 'session_expired')
+        return NextResponse.redirect(url)
+      }
+    }
+  }
+
+  if (!user && !pathname.startsWith('/auth') && !pathname.startsWith('/invite') && !pathname.startsWith('/api')) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)

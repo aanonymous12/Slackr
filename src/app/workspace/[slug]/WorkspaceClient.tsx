@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Hash, Lock, Plus, ChevronDown, ChevronRight, MessageSquare, Users, Settings, Bell, Headphones, X, Search, LogOut } from 'lucide-react'
+import { Hash, Lock, Plus, ChevronDown, ChevronRight, MessageSquare, Users, Settings, Bell, Headphones, X, Search, LogOut, Menu, GitBranch } from 'lucide-react'
 import InviteModal from '@/components/modals/InviteModal'
 import CreateChannelModal from '@/components/modals/CreateChannelModal'
 import NewDMModal from '@/components/modals/NewDMModal'
@@ -40,6 +40,7 @@ export default function WorkspaceClient({
   const [showChannelSection, setShowChannelSection] = useState(true)
   const [showDMSection, setShowDMSection] = useState(true)
   const [huddleActive, setHuddleActive] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [huddleChannelId, setHuddleChannelId] = useState<string | null>(null)
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
   const [activeItem, setActiveItem] = useState<string | null>(null)
@@ -116,7 +117,12 @@ export default function WorkspaceClient({
   const myProfile = profile as { id: string; full_name: string; status: string; avatar_url?: string } | null
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#1a1d21' }}>
+    <div className="app-layout" style={{ height: '100vh', overflow: 'hidden', background: '#1a1d21', position: 'relative' }}>
+
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+      )}
 
       {/* Workspace Bar */}
       <div style={{ width: 68, background: '#1a1d21', borderRight: '1px solid #2a2d31', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 0', gap: 6, flexShrink: 0 }}>
@@ -303,6 +309,12 @@ export default function WorkspaceClient({
 
       {/* Main content area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        {/* Mobile header */}
+        <div style={{ display: 'none' }} className="mobile-top-bar">
+          <button onClick={() => setSidebarOpen(true)} style={{ background: 'none', border: 'none', color: '#b9bbbe', cursor: 'pointer', padding: 8 }}>
+            <Menu size={20} />
+          </button>
+        </div>
         {huddleActive && (
           <HuddleBar
             channelId={huddleChannelId!}
