@@ -21,41 +21,42 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user }, error } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
-  // Check if session is expired (last sign-in > 24h for invite-joined users)
-  if (user && !error) {
-    const lastSignIn = user.last_sign_in_at
-    if (lastSignIn) {
-      const hoursSinceLogin = (Date.now() - new Date(lastSignIn).getTime()) / (1000 * 60 * 60)
-      const sessionDuration = Number(process.env.SESSION_DURATION_HOURS || 24)
-      if (hoursSinceLogin > sessionDuration && !pathname.startsWith('/auth')) {
-        // Sign out and redirect to login
-        await supabase.auth.signOut()
-        const url = request.nextUrl.clone()
-        url.pathname = '/auth/login'
-        url.searchParams.set('reason', 'session_expired')
-        return NextResponse.redirect(url)
-      }
-    }
-  }
+  // Always allow: auth routes, invite routes, API routes
+  const isPublic =
+    pathname.startsWith('/auth') ||
+    pathname.startsWith('/invite') ||
+    pathname.startsWith('/api/')
 
-  if (!user && !pathname.startsWith('/auth') && !pathname.startsWith('/invite') && !pathname.startsWith('/api')) {
+  if (isPublic) return supabaseResponse
+
+  // Not logged in → login page
+  if (!user) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
   }
 
-  if (user && pathname.startsWith('/auth')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/'
-    return NextResponse.redirect(url)
+  // Session expiry check (24h)
+  if (user.last_sign_in_at) {
+    const hours = (Date.now() - new Date(user.last_sign_in_at).getTime()) / 3_600_000
+    const limit = Number(process.env.SESSION_DURATION_HOURS || 24)
+    if (hours > limit) {
+      await supabase.auth.signOut()
+      const url = request.nextUrl.clone()
+      url.pathname = '/auth/login'
+      url.searchParams.set('reason', 'session_expired')
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 }

@@ -6,23 +6,40 @@ export async function GET(req: NextRequest) {
   if (!token) return NextResponse.json({ error: 'Token required' }, { status: 400 })
 
   const admin = adminClient()
-  const { data: invite } = await admin
+
+  const { data: invite, error } = await admin
     .from('invites')
-    .select('email, role, expires_at, accepted_at, workspaces(id, name, slug, icon_color, icon_letter)')
+    .select('id, email, role, expires_at, accepted_at, workspace_id')
     .eq('token', token)
     .single()
 
-  if (!invite) return NextResponse.json({ error: 'Invite not found' }, { status: 404 })
-  if (invite.accepted_at) return NextResponse.json({ error: 'Invite already used' }, { status: 410 })
-  if (new Date(invite.expires_at) < new Date()) return NextResponse.json({ error: 'Invite expired' }, { status: 410 })
+  if (error || !invite) {
+    return NextResponse.json({ error: 'Invite not found' }, { status: 404 })
+  }
+  if (invite.accepted_at) {
+    return NextResponse.json({ error: 'This invite has already been used' }, { status: 410 })
+  }
+  if (new Date(invite.expires_at) < new Date()) {
+    return NextResponse.json({ error: 'This invite link has expired' }, { status: 410 })
+  }
 
-  const workspace = invite.workspaces as unknown as Record<string, unknown>
+  // Get workspace details separately
+  const { data: workspace } = await admin
+    .from('workspaces')
+    .select('id, name, slug, icon_color, icon_letter')
+    .eq('id', invite.workspace_id)
+    .single()
+
+  if (!workspace) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 })
+  }
+
   return NextResponse.json({
-    email: invite.email,
-    role: invite.role,
-    workspace_name: workspace?.name,
-    workspace_slug: workspace?.slug,
-    icon_color: workspace?.icon_color,
-    icon_letter: workspace?.icon_letter,
+    workspace_name: workspace.name,
+    workspace_slug: workspace.slug,
+    icon_color:     workspace.icon_color,
+    icon_letter:    workspace.icon_letter,
+    email:          invite.email,
+    role:           invite.role,
   })
 }
