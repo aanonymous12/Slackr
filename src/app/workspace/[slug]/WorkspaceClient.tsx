@@ -1,14 +1,16 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Hash, Lock, Plus, ChevronDown, ChevronRight, MessageSquare, Users, Settings, Bell, Headphones, X, Search, LogOut, Menu, GitBranch } from 'lucide-react'
+import {
+  Hash, Lock, Plus, ChevronDown, ChevronRight,
+  MessageSquare, Users, LogOut, Menu, X, GitBranch, Bell
+} from 'lucide-react'
 import InviteModal from '@/components/modals/InviteModal'
 import CreateChannelModal from '@/components/modals/CreateChannelModal'
 import NewDMModal from '@/components/modals/NewDMModal'
 import MembersModal from '@/components/modals/MembersModal'
-import HuddleBar from '@/components/chat/HuddleBar'
 
 interface Props {
   workspace: Record<string, unknown>
@@ -24,357 +26,307 @@ interface Props {
 }
 
 export default function WorkspaceClient({
-  workspace, workspaces, channels: initialChannels, allChannels,
+  workspace, workspaces, channels: initialChannels,
   conversations: initialConvs, profile, members, membership, currentUserId, children
 }: Props) {
   const router = useRouter()
-  const params = useParams()
   const supabase = createClient()
-
   const [channels, setChannels] = useState(initialChannels)
-  const [conversations] = useState(initialConvs)
   const [showInvite, setShowInvite] = useState(false)
   const [showCreateChannel, setShowCreateChannel] = useState(false)
   const [showNewDM, setShowNewDM] = useState(false)
   const [showMembers, setShowMembers] = useState(false)
-  const [showChannelSection, setShowChannelSection] = useState(true)
-  const [showDMSection, setShowDMSection] = useState(true)
-  const [huddleActive, setHuddleActive] = useState(false)
+  const [showChannels, setShowChannels] = useState(true)
+  const [showDMs, setShowDMs] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [huddleChannelId, setHuddleChannelId] = useState<string | null>(null)
-  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
   const [activeItem, setActiveItem] = useState<string | null>(null)
+  const [unread, setUnread] = useState<Record<string, number>>({})
+  // mobile tab: 'chat' | 'dms' | 'tools'
+  const [mobileTab, setMobileTab] = useState<'chat' | 'dms' | 'tools'>('chat')
 
   const ws = workspace as { id: string; name: string; slug: string; icon_color: string; icon_letter: string }
+  const myProfile = profile as { id: string; full_name: string; status: string } | null
 
-  // Determine active channel/conv from URL
+  // Set active item from URL
   useEffect(() => {
     const path = window.location.pathname
-    const match = path.match(/\/channel\/(.+)$/) || path.match(/\/dm\/(.+)$/)
-    if (match) setActiveItem(match[1])
-  }, [params])
+    const m = path.match(/\/channel\/([^/]+)$/) || path.match(/\/dm\/([^/]+)$/)
+    if (m) setActiveItem(m[1])
+  }, [])
 
-  // Listen for new messages to update unread counts
+  // Realtime unread counts
   useEffect(() => {
-    const channel = supabase
-      .channel(`workspace-${ws.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-      }, (payload) => {
+    const ch = supabase.channel(`ws-unread-${ws.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
         const msg = payload.new as Record<string, unknown>
         if (msg.sender_id === currentUserId) return
         const key = (msg.channel_id || msg.conversation_id) as string
         if (key && key !== activeItem) {
-          setUnreadCounts(prev => ({ ...prev, [key]: (prev[key] || 0) + 1 }))
+          setUnread(prev => ({ ...prev, [key]: (prev[key] || 0) + 1 }))
         }
       })
       .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
+    return () => { supabase.removeChannel(ch) }
   }, [ws.id, currentUserId, activeItem, supabase])
 
-  const navigateTo = useCallback((path: string, id: string) => {
+  const navigate = useCallback((path: string, id: string) => {
     setActiveItem(id)
-    setUnreadCounts(prev => { const n = { ...prev }; delete n[id]; return n })
+    setUnread(prev => { const n = { ...prev }; delete n[id]; return n })
+    setSidebarOpen(false)
     router.push(path)
   }, [router])
 
-  async function handleSignOut() {
+  async function signOut() {
     await supabase.auth.signOut()
     router.push('/auth/login')
   }
 
-  function getAvatarColor(str: string) {
-    const colors = ['#5865f2','#ed4245','#e8912d','#2eb67d','#4a90d9','#7b2d8b','#e91e8c']
-    let hash = 0
-    for (const c of str) hash = hash * 31 + c.charCodeAt(0)
-    return colors[Math.abs(hash) % colors.length]
+  function color(id: string) {
+    const cs = ['#5865f2','#ed4245','#e8912d','#2eb67d','#4a90d9','#7b2d8b']
+    let h = 0; for (const c of id) h = h * 31 + c.charCodeAt(0)
+    return cs[Math.abs(h) % cs.length]
   }
+  function initials(n: string) { return (n||'').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()||'?' }
+  function statusColor(s: string) { return s==='active'?'#2eb67d':s==='away'?'#faa61a':s==='dnd'?'#ed4245':'#72767d' }
 
-  function getInitials(name: string | null | undefined) {
-    if (!name) return '?'
-    return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
-  }
-
-  function getStatusColor(status: string) {
-    return status === 'active' ? '#2eb67d' : status === 'away' ? '#faa61a' : status === 'dnd' ? '#ed4245' : '#72767d'
-  }
-
-  // Process DMs
-  const dmList = conversations.map((m: Record<string, unknown>) => {
-    const conv = m.conversations as Record<string, unknown>
+  const dmList = initialConvs.map(m => {
+    const conv = (m as Record<string,unknown>).conversations as Record<string,unknown>
     if (!conv) return null
-    const convMembers = (conv.conversation_members as Record<string, unknown>[]) || []
-    const others = convMembers
-      .filter((cm: Record<string, unknown>) => cm.user_id !== currentUserId)
-      .map((cm: Record<string, unknown>) => cm.profiles as Record<string, unknown>)
-      .filter(Boolean)
+    const cms = (conv.conversation_members as Record<string,unknown>[]) || []
+    const others = cms.filter(cm => cm.user_id !== currentUserId).map(cm => cm.profiles as Record<string,unknown>).filter(Boolean)
     return { ...conv, others }
   }).filter(Boolean)
 
-  const myProfile = profile as { id: string; full_name: string; status: string; avatar_url?: string } | null
+  const totalUnread = Object.values(unread).reduce((a, b) => a + b, 0)
+
+  // Sidebar content — shared between desktop and mobile drawer
+  const sidebarContent = (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg1)' }}>
+      {/* Header */}
+      <div style={{ padding: '12px 14px', borderBottom: '1px solid #2a2d31', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text1)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)' }} />
+            {ws.name}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>{members.length} members</div>
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button onClick={() => setShowInvite(true)} style={iconBtn} title="Invite">✉</button>
+          <button onClick={() => setSidebarOpen(false)} style={{ ...iconBtn, display: 'none' }} className="sidebar-close-btn">
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* Scrollable nav */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
+        {/* Channels section */}
+        <div style={{ padding: '6px 14px 3px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', color: 'var(--text2)', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}
+          onClick={() => setShowChannels(s => !s)}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {showChannels ? <ChevronDown size={11} /> : <ChevronRight size={11} />} Channels
+          </span>
+          <button onClick={e => { e.stopPropagation(); setShowCreateChannel(true) }} style={{ ...iconBtn, fontSize: 17 }}>+</button>
+        </div>
+
+        {showChannels && channels.map(ch => {
+          const c = ch as { id: string; name: string; is_private: boolean }
+          const isActive = c.id === activeItem
+          const badge = unread[c.id] || 0
+          return (
+            <div key={c.id}
+              onClick={() => navigate(`/workspace/${ws.slug}/channel/${c.id}`, c.id)}
+              style={{ padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', borderRadius: 6, margin: '0 6px', color: isActive ? '#fff' : badge ? 'var(--text1)' : 'var(--text2)', background: isActive ? 'var(--accent)' : 'transparent', fontWeight: badge ? 700 : 400, fontSize: 14 }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--bg2)' }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}>
+              {c.is_private ? <Lock size={13} style={{ flexShrink: 0 }} /> : <Hash size={13} style={{ flexShrink: 0 }} />}
+              <span className="truncate" style={{ flex: 1 }}>{c.name}</span>
+              {badge > 0 && !isActive && <span style={{ background: 'var(--red)', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{badge > 9 ? '9+' : badge}</span>}
+            </div>
+          )
+        })}
+
+        <div onClick={() => setShowCreateChannel(true)}
+          style={{ padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', color: 'var(--text3)', fontSize: 13, margin: '0 6px', borderRadius: 6 }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg2)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+          <Plus size={13} /> Add a channel
+        </div>
+
+        {/* DMs section */}
+        <div style={{ padding: '8px 14px 3px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', color: 'var(--text2)', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', marginTop: 4 }}
+          onClick={() => setShowDMs(s => !s)}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {showDMs ? <ChevronDown size={11} /> : <ChevronRight size={11} />} Direct Messages
+          </span>
+          <button onClick={e => { e.stopPropagation(); setShowNewDM(true) }} style={{ ...iconBtn, fontSize: 17 }}>+</button>
+        </div>
+
+        {showDMs && dmList.map(dm => {
+          if (!dm) return null
+          const conv = dm as { id: string; others: Record<string,unknown>[]; is_group: boolean; name?: string }
+          const isActive = conv.id === activeItem
+          const badge = unread[conv.id] || 0
+          const first = conv.others[0] as Record<string,unknown> | undefined
+          const displayName = conv.is_group
+            ? (conv.name || conv.others.map(o => String(o?.full_name || o?.username)).join(', '))
+            : String(first?.full_name || first?.username || 'Unknown')
+          const st = String(first?.status || 'offline')
+          return (
+            <div key={conv.id}
+              onClick={() => navigate(`/workspace/${ws.slug}/dm/${conv.id}`, conv.id)}
+              style={{ padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', borderRadius: 6, margin: '0 6px', color: isActive ? '#fff' : badge ? 'var(--text1)' : 'var(--text2)', background: isActive ? 'var(--accent)' : 'transparent', fontWeight: badge ? 700 : 400 }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--bg2)' }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}>
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <div style={{ width: 22, height: 22, borderRadius: '50%', background: color(String(first?.id||'')), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700 }}>
+                  {initials(String(first?.full_name||''))}
+                </div>
+                <div style={{ position: 'absolute', bottom: -1, right: -1, width: 7, height: 7, borderRadius: '50%', background: statusColor(st), border: '2px solid var(--bg1)' }} />
+              </div>
+              <span className="truncate" style={{ flex: 1, fontSize: 14 }}>{displayName}</span>
+              {badge > 0 && !isActive && <span style={{ background: 'var(--red)', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{badge > 9 ? '9+' : badge}</span>}
+            </div>
+          )
+        })}
+
+        <div onClick={() => setShowNewDM(true)}
+          style={{ padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', color: 'var(--text3)', fontSize: 13, margin: '0 6px', borderRadius: 6 }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg2)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+          <Plus size={13} /> New direct message
+        </div>
+
+        {/* Tools link */}
+        <div style={{ marginTop: 8, padding: '6px 14px 3px', color: 'var(--text2)', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>Tools</div>
+        <div onClick={() => { navigate(`/tools/diagram`, 'diagram'); window.open('/tools/diagram', '_blank') }}
+          style={{ padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', color: 'var(--text2)', fontSize: 14, margin: '0 6px', borderRadius: 6 }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg2)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+          <GitBranch size={13} /> Architecture Diagram
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{ padding: '8px 10px', borderTop: '1px solid #2a2d31', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: '#7b2d8b', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+            {initials(myProfile?.full_name || '')}
+          </div>
+          <div style={{ position: 'absolute', bottom: -1, right: -1, width: 8, height: 8, borderRadius: '50%', background: statusColor(myProfile?.status || 'active'), border: '2px solid var(--bg1)' }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="truncate" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text1)' }}>{myProfile?.full_name || 'You'}</div>
+          <div style={{ fontSize: 10, color: 'var(--green)' }}>● Active</div>
+        </div>
+        <button onClick={() => setShowMembers(true)} style={iconBtn} title="Members"><Users size={14} /></button>
+        <button onClick={signOut} style={iconBtn} title="Sign out"><LogOut size={14} /></button>
+      </div>
+    </div>
+  )
 
   return (
-    <div className="app-layout" style={{ height: '100vh', overflow: 'hidden', background: '#1a1d21', position: 'relative' }}>
+    <div className={`app-layout${sidebarOpen ? ' sidebar-open' : ''}`}>
 
-      {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
-        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
-      )}
+      {/* Mobile overlay */}
+      <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
 
-      {/* Workspace Bar */}
-      <div style={{ width: 68, background: '#1a1d21', borderRight: '1px solid #2a2d31', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 0', gap: 6, flexShrink: 0 }}>
-        {workspaces.map((w: Record<string, unknown>) => {
+      {/* Workspace bar — desktop only */}
+      <div className="app-ws-bar">
+        {workspaces.map(w => {
           const ww = w as { id: string; name: string; slug: string; icon_color: string; icon_letter: string }
-          const isActive = ww.slug === ws.slug
+          const isAct = ww.slug === ws.slug
           return (
-            <div key={ww.id}
-              onClick={() => router.push(`/workspace/${ww.slug}`)}
-              title={ww.name}
-              style={{
-                width: 42, height: 42, borderRadius: isActive ? 14 : 10,
-                background: ww.icon_color || '#4a154b', color: '#fff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontWeight: 700, fontSize: 16, cursor: 'pointer',
-                border: isActive ? '2px solid #fff' : '2px solid transparent',
-                transition: 'all .15s', flexShrink: 0,
-              }}>
+            <div key={ww.id} onClick={() => router.push(`/workspace/${ww.slug}`)} title={ww.name}
+              style={{ width: 42, height: 42, borderRadius: isAct ? 14 : 10, background: ww.icon_color || '#4a154b', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 16, cursor: 'pointer', border: isAct ? '2px solid #fff' : '2px solid transparent', transition: 'all .15s', flexShrink: 0 }}>
               {ww.icon_letter || ww.name?.[0]}
             </div>
           )
         })}
-        <div style={{ width: 32, height: 1, background: '#3f4348', margin: '4px 0' }} />
-        <div onClick={() => router.push('/workspace/new')} title="Create workspace"
-          style={{ width: 42, height: 42, borderRadius: '50%', border: '2px dashed #72767d', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#72767d', fontSize: 20, transition: 'all .15s' }}>
+        <div style={{ width: 32, height: 1, background: 'var(--border)', margin: '2px 0' }} />
+        <div onClick={() => router.push('/workspace/new')} title="New workspace"
+          style={{ width: 42, height: 42, borderRadius: '50%', border: '2px dashed var(--text3)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text3)', fontSize: 20 }}>
           +
         </div>
       </div>
 
       {/* Sidebar */}
-      <div style={{ width: 240, background: '#222529', display: 'flex', flexDirection: 'column', borderRight: '1px solid #2a2d31', flexShrink: 0 }}>
-
-        {/* Header */}
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid #2a2d31', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: '#f2f3f5', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2eb67d', flexShrink: 0 }} />
-              {ws.name}
-            </div>
-            <div style={{ fontSize: 11, color: '#72767d', marginTop: 2 }}>{members.length} members</div>
-          </div>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button onClick={() => setShowInvite(true)} title="Invite people" style={iconBtnStyle}>✉</button>
-            <button onClick={() => {}} title="Compose" style={iconBtnStyle}>✏</button>
-          </div>
-        </div>
-
-        {/* Search */}
-        <div style={{ padding: '8px 12px', borderBottom: '1px solid #2a2d31' }}>
-          <div style={{ background: '#2c2f33', border: '1px solid #3f4348', borderRadius: 6, padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 6, color: '#72767d', fontSize: 13, cursor: 'text' }}>
-            <Search size={13} />
-            <span>Search channels & DMs</span>
-          </div>
-        </div>
-
-        {/* Nav links */}
-        <div style={{ padding: '4px 8px' }}>
-          {[
-            { icon: '🔔', label: 'Threads' },
-            { icon: '📌', label: 'Saved items' },
-          ].map(item => (
-            <div key={item.label} style={{ padding: '5px 8px', borderRadius: 6, cursor: 'pointer', color: '#b9bbbe', display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}
-              onMouseEnter={e => (e.currentTarget.style.background = '#2c2f33')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-              {item.icon} {item.label}
-            </div>
-          ))}
-        </div>
-
-        {/* Scrollable section */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
-
-          {/* Channels */}
-          <div style={{ padding: '8px 16px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', color: '#b9bbbe', fontSize: 13, fontWeight: 600 }}
-            onClick={() => setShowChannelSection(s => !s)}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              {showChannelSection ? <ChevronDown size={12} /> : <ChevronRight size={12} />} Channels
-            </span>
-            <button onClick={e => { e.stopPropagation(); setShowCreateChannel(true) }} style={{ ...iconBtnStyle, fontSize: 18 }}>+</button>
-          </div>
-
-          {showChannelSection && channels.map((ch: Record<string, unknown>) => {
-            const c = ch as { id: string; name: string; is_private: boolean }
-            const isActive = c.id === activeItem
-            const unread = unreadCounts[c.id] || 0
-            return (
-              <div key={c.id}
-                onClick={() => navigateTo(`/workspace/${ws.slug}/channel/${c.id}`, c.id)}
-                style={{
-                  padding: '5px 16px', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
-                  borderRadius: 6, margin: '0 6px', color: isActive ? '#fff' : unread ? '#f2f3f5' : '#b9bbbe',
-                  background: isActive ? '#4a90d9' : 'transparent', fontWeight: unread ? 700 : 400,
-                  transition: 'background .1s',
-                }}
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#2c2f33' }}
-                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}>
-                {c.is_private ? <Lock size={14} style={{ flexShrink: 0 }} /> : <Hash size={14} style={{ flexShrink: 0 }} />}
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 14 }}>{c.name}</span>
-                {unread > 0 && !isActive && (
-                  <span style={{ background: '#ed4245', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: 11, fontWeight: 700 }}>{unread}</span>
-                )}
-              </div>
-            )
-          })}
-
-          <div onClick={() => setShowCreateChannel(true)}
-            style={{ padding: '5px 16px', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: '#72767d', fontSize: 13, margin: '0 6px', borderRadius: 6 }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#2c2f33')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-            <Plus size={14} /> Add a channel
-          </div>
-
-          {/* DMs */}
-          <div style={{ padding: '12px 16px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', color: '#b9bbbe', fontSize: 13, fontWeight: 600 }}
-            onClick={() => setShowDMSection(s => !s)}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              {showDMSection ? <ChevronDown size={12} /> : <ChevronRight size={12} />} Direct Messages
-            </span>
-            <button onClick={e => { e.stopPropagation(); setShowNewDM(true) }} style={{ ...iconBtnStyle, fontSize: 18 }}>+</button>
-          </div>
-
-          {showDMSection && dmList.map((dm) => {
-            if (!dm) return null
-            const conv = dm as { id: string; others: Record<string, unknown>[]; is_group: boolean; name?: string }
-            const isActive = conv.id === activeItem
-            const unread = unreadCounts[conv.id] || 0
-            const displayName = conv.is_group
-              ? (conv.name || conv.others.map((o: Record<string, unknown>) => (o.full_name || o.username)).join(', '))
-              : ((conv.others[0] as Record<string, unknown>)?.full_name || (conv.others[0] as Record<string, unknown>)?.username || 'Unknown')
-            const firstOther = conv.others[0] as Record<string, unknown> | undefined
-            const status = firstOther?.status as string || 'offline'
-
-            return (
-              <div key={conv.id}
-                onClick={() => navigateTo(`/workspace/${ws.slug}/dm/${conv.id}`, conv.id)}
-                style={{
-                  padding: '5px 16px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-                  borderRadius: 6, margin: '0 6px', color: isActive ? '#fff' : unread ? '#f2f3f5' : '#b9bbbe',
-                  background: isActive ? '#4a90d9' : 'transparent', fontWeight: unread ? 700 : 400,
-                }}
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#2c2f33' }}
-                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}>
-                <div style={{ position: 'relative', flexShrink: 0 }}>
-                  <div style={{ width: 24, height: 24, borderRadius: '50%', background: getAvatarColor(String(firstOther?.id || '')), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700 }}>
-                    {getInitials(String(firstOther?.full_name || firstOther?.username || ''))}
-                  </div>
-                  <div style={{ position: 'absolute', bottom: -1, right: -1, width: 8, height: 8, borderRadius: '50%', background: getStatusColor(status), border: '2px solid #222529' }} />
-                </div>
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 14 }}>{String(displayName)}</span>
-                {unread > 0 && !isActive && (
-                  <span style={{ background: '#ed4245', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: 11, fontWeight: 700 }}>{unread}</span>
-                )}
-              </div>
-            )
-          })}
-
-          <div onClick={() => setShowNewDM(true)}
-            style={{ padding: '5px 16px', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: '#72767d', fontSize: 13, margin: '0 6px', borderRadius: 6 }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#2c2f33')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-            <Plus size={14} /> New direct message
-          </div>
-
-        </div>
-
-        {/* Footer */}
-        <div style={{ padding: '10px 12px', borderTop: '1px solid #2a2d31', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ position: 'relative', flexShrink: 0 }}>
-            <div style={{ width: 34, height: 34, borderRadius: 8, background: '#7b2d8b', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-              {getInitials(myProfile?.full_name || '')}
-            </div>
-            <div style={{ position: 'absolute', bottom: -1, right: -1, width: 9, height: 9, borderRadius: '50%', background: getStatusColor(myProfile?.status || 'active'), border: '2px solid #222529' }} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#f2f3f5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{myProfile?.full_name || 'You'}</div>
-            <div style={{ fontSize: 11, color: getStatusColor(myProfile?.status || 'active'), display: 'flex', alignItems: 'center', gap: 4 }}>● Active</div>
-          </div>
-          <div style={{ display: 'flex', gap: 2 }}>
-            <button onClick={() => setShowMembers(true)} title="Members" style={iconBtnStyle}><Users size={15} /></button>
-            <button onClick={handleSignOut} title="Sign out" style={iconBtnStyle}><LogOut size={15} /></button>
-          </div>
-        </div>
+      <div className="app-sidebar">
+        {sidebarContent}
       </div>
 
-      {/* Main content area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        {/* Mobile header */}
-        <div style={{ display: 'none' }} className="mobile-top-bar">
-          <button onClick={() => setSidebarOpen(true)} style={{ background: 'none', border: 'none', color: '#b9bbbe', cursor: 'pointer', padding: 8 }}>
+      {/* Main */}
+      <div className="app-main">
+        {/* Mobile top bar */}
+        <div style={{ display: 'none', padding: '8px 12px', borderBottom: '1px solid #2a2d31', alignItems: 'center', gap: 10, flexShrink: 0, background: 'var(--bg1)' }} className="mobile-topbar">
+          <button onClick={() => setSidebarOpen(true)} style={{ background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', position: 'relative' }}>
             <Menu size={20} />
+            {totalUnread > 0 && <span style={{ position: 'absolute', top: 0, right: 0, background: 'var(--red)', color: '#fff', borderRadius: '50%', width: 14, height: 14, fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{totalUnread > 9 ? '9+' : totalUnread}</span>}
           </button>
+          <span style={{ fontWeight: 700, fontSize: 16, flex: 1, color: 'var(--text1)' }} className="truncate">
+            {ws.name}
+          </span>
+          <button onClick={() => setShowMembers(true)} style={{ background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer', padding: 4 }}><Users size={18} /></button>
         </div>
-        {huddleActive && (
-          <HuddleBar
-            channelId={huddleChannelId!}
-            currentUserId={currentUserId}
-            onLeave={() => { setHuddleActive(false); setHuddleChannelId(null) }}
-          />
-        )}
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {children}
-        </div>
+
+        {children}
       </div>
+
+      {/* Mobile bottom navigation */}
+      <nav className="mobile-nav">
+        <button className={`mobile-nav-btn${mobileTab === 'chat' ? ' active' : ''}`}
+          onClick={() => { setMobileTab('chat'); setSidebarOpen(false) }}>
+          <Hash size={20} />
+          <span>Channels</span>
+          {totalUnread > 0 && <span className="badge">{totalUnread > 9 ? '9+' : totalUnread}</span>}
+        </button>
+        <button className={`mobile-nav-btn${mobileTab === 'dms' ? ' active' : ''}`}
+          onClick={() => { setMobileTab('dms'); setSidebarOpen(true) }}>
+          <MessageSquare size={20} />
+          <span>Messages</span>
+        </button>
+        <button className="mobile-nav-btn"
+          onClick={() => setShowMembers(true)}>
+          <Users size={20} />
+          <span>Members</span>
+        </button>
+        <button className="mobile-nav-btn"
+          onClick={() => window.open('/tools/diagram', '_blank')}>
+          <GitBranch size={20} />
+          <span>Tools</span>
+        </button>
+        <button className="mobile-nav-btn"
+          onClick={() => setShowInvite(true)}>
+          <Bell size={20} />
+          <span>Invite</span>
+        </button>
+      </nav>
 
       {/* Modals */}
-      {showInvite && (
-        <InviteModal
-          workspaceId={ws.id}
-          workspaceName={ws.name}
-          currentUserId={currentUserId}
-          onClose={() => setShowInvite(false)}
-        />
-      )}
+      {showInvite && <InviteModal workspaceId={ws.id} workspaceName={ws.name} currentUserId={currentUserId} onClose={() => setShowInvite(false)} />}
       {showCreateChannel && (
-        <CreateChannelModal
-          workspaceId={ws.id}
-          currentUserId={currentUserId}
-          workspaceSlug={ws.slug}
+        <CreateChannelModal workspaceId={ws.id} workspaceSlug={ws.slug} currentUserId={currentUserId}
           onClose={() => setShowCreateChannel(false)}
-          onCreated={(ch) => {
-            setChannels(prev => [...prev, ch as Record<string, unknown>])
-            navigateTo(`/workspace/${ws.slug}/channel/${(ch as Record<string, unknown>).id}`, String((ch as Record<string, unknown>).id))
+          onCreated={ch => {
+            setChannels(prev => [...prev, ch as Record<string,unknown>])
+            navigate(`/workspace/${ws.slug}/channel/${(ch as Record<string,unknown>).id}`, String((ch as Record<string,unknown>).id))
             setShowCreateChannel(false)
-          }}
-        />
+          }} />
       )}
-      {showNewDM && (
-        <NewDMModal
-          workspaceId={ws.id}
-          workspaceSlug={ws.slug}
-          currentUserId={currentUserId}
-          members={members}
-          onClose={() => setShowNewDM(false)}
-        />
-      )}
+      {showNewDM && <NewDMModal workspaceId={ws.id} workspaceSlug={ws.slug} currentUserId={currentUserId} members={members} onClose={() => setShowNewDM(false)} />}
       {showMembers && (
-        <MembersModal
-          members={members}
-          currentUserId={currentUserId}
-          membership={membership as Record<string, unknown>}
-          workspaceId={ws.id}
-          workspaceSlug={ws.slug}
-          onClose={() => setShowMembers(false)}
-          onInvite={() => { setShowMembers(false); setShowInvite(true) }}
-        />
+        <MembersModal members={members} currentUserId={currentUserId} membership={membership} workspaceId={ws.id} workspaceSlug={ws.slug} workspaceName={ws.name} onClose={() => setShowMembers(false)} onInvite={() => { setShowMembers(false); setShowInvite(true) }} />
       )}
+
+      <style>{`
+        @media (max-width: 680px) {
+          .mobile-topbar { display: flex !important; }
+          .sidebar-close-btn { display: flex !important; }
+        }
+      `}</style>
     </div>
   )
 }
 
-const iconBtnStyle: React.CSSProperties = {
-  width: 28, height: 28, borderRadius: 6, border: 'none', background: 'transparent',
-  color: '#b9bbbe', cursor: 'pointer', display: 'flex', alignItems: 'center',
-  justifyContent: 'center', fontSize: 15, transition: 'background .1s',
-}
+const iconBtn: React.CSSProperties = { width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', color: 'var(--text2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }

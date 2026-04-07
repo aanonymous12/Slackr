@@ -2,231 +2,364 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   CSS VARIABLES
+   ============================================================ */
 :root {
-  --bg-workspace: #1a1d21;
-  --bg-sidebar: #222529;
-  --bg-main: #222529;
-  --bg-surface: #2c2f33;
-  --bg-hover: #36393f;
+  --bg0: #1a1d21;
+  --bg1: #222529;
+  --bg2: #2c2f33;
+  --bg3: #36393f;
   --accent: #4a90d9;
-  --accent-green: #2eb67d;
-  --accent-amber: #faa61a;
-  --accent-red: #ed4245;
-  --text-primary: #f2f3f5;
-  --text-secondary: #b9bbbe;
-  --text-muted: #72767d;
+  --green: #2eb67d;
+  --amber: #faa61a;
+  --red: #ed4245;
+  --text1: #f2f3f5;
+  --text2: #b9bbbe;
+  --text3: #72767d;
   --border: #3f4348;
   --mention: #ffd900;
-  --sidebar-width: 240px;
-  --workspace-bar-width: 68px;
+  --sidebar-w: 240px;
+  --ws-bar-w: 68px;
+  --mobile-nav-h: 56px;
 }
 
-* { box-sizing: border-box; }
-
-html, body {
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; -webkit-text-size-adjust: 100%; }
+body {
   height: 100%;
   overflow: hidden;
-  margin: 0; padding: 0;
-  -webkit-text-size-adjust: 100%;
-}
-
-body {
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  background: var(--bg-workspace);
-  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg0);
+  color: var(--text1);
   font-size: 14px;
-  touch-action: manipulation;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
+/* scrollbars */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-.message-row:hover { background: rgba(255,255,255,0.03); border-radius: 6px; }
-.message-row .hover-actions { visibility: hidden; opacity: 0; transition: opacity .1s; }
-.message-row:hover .hover-actions { visibility: visible; opacity: 1; }
-
-@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes slide-right { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-@keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
-@keyframes spin { to { transform: rotate(360deg) } }
-
-.animate-fade-in { animation: fade-in 0.15s ease; }
-.animate-slide-right { animation: slide-right 0.2s ease; }
-.mention-chip { color: var(--mention); background: rgba(255,217,0,0.1); border-radius: 3px; padding: 0 3px; }
-.mention-chip:hover { background: rgba(255,217,0,0.2); cursor: pointer; }
-
 /* ============================================================
-   MOBILE RESPONSIVE
+   APP LAYOUT  (flex row: ws-bar | sidebar | main)
    ============================================================ */
-
-/* Mobile: sidebar overlay */
-.sidebar-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.6);
-  z-index: 40;
-}
-
-/* Show/hide sidebar on mobile */
-.sidebar-mobile-open .sidebar-overlay { display: block; }
-.sidebar-mobile-open .app-sidebar {
-  transform: translateX(0) !important;
-}
-
-/* App layout */
 .app-layout {
   display: flex;
   height: 100vh;
+  height: 100dvh;          /* dynamic viewport for mobile */
+  overflow: hidden;
+  position: relative;
+}
+
+/* Workspace icon bar */
+.app-ws-bar {
+  width: var(--ws-bar-w);
+  flex-shrink: 0;
+  background: var(--bg0);
+  border-right: 1px solid #2a2d31;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  gap: 6px;
+  z-index: 20;
+}
+
+/* Sidebar */
+.app-sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--bg1);
+  border-right: 1px solid #2a2d31;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.25s ease;
+  z-index: 30;
   overflow: hidden;
 }
 
-.app-workspace-bar {
-  width: var(--workspace-bar-width);
-  flex-shrink: 0;
-}
-
-.app-sidebar {
-  width: var(--sidebar-width);
-  flex-shrink: 0;
-  transition: transform 0.2s ease;
-}
-
+/* Main content */
 .app-main {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  background: var(--bg1);
 }
 
-/* Mobile bottom nav bar */
+/* Overlay behind sidebar on mobile */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  z-index: 25;
+  backdrop-filter: blur(2px);
+}
+
+/* ============================================================
+   MOBILE NAV BAR
+   ============================================================ */
 .mobile-nav {
   display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: var(--mobile-nav-h);
+  background: var(--bg1);
+  border-top: 1px solid var(--border);
+  z-index: 40;
+  align-items: stretch;
+}
+.mobile-nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 10px;
+  font-family: inherit;
+  padding: 6px 4px;
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+}
+.mobile-nav-btn.active { color: var(--accent); }
+.mobile-nav-btn .badge {
+  position: absolute;
+  top: 4px; right: 20%;
+  background: var(--red);
+  color: #fff;
+  border-radius: 10px;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  line-height: 1;
 }
 
-@media (max-width: 768px) {
+/* ============================================================
+   MESSAGE ROW HOVER
+   ============================================================ */
+.message-row { position: relative; }
+.message-row:hover { background: rgba(255,255,255,.025); border-radius: 4px; }
+.message-row .hover-actions { visibility: hidden; opacity: 0; transition: opacity .1s; }
+.message-row:hover .hover-actions { visibility: visible; opacity: 1; }
+
+/* ============================================================
+   MENTION CHIP
+   ============================================================ */
+.mention-chip {
+  color: var(--mention);
+  background: rgba(255,217,0,.1);
+  border-radius: 3px;
+  padding: 0 3px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.mention-chip:hover { background: rgba(255,217,0,.2); }
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+@keyframes fade-in    { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+@keyframes slide-up   { from { transform:translateY(100%); } to { transform:translateY(0); } }
+@keyframes slide-right{ from { transform:translateX(20px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+@keyframes pulse-dot  { 0%,100%{opacity:1} 50%{opacity:.3} }
+@keyframes spin       { to { transform:rotate(360deg) } }
+
+.animate-fade-in    { animation: fade-in .15s ease; }
+.animate-slide-up   { animation: slide-up .2s ease; }
+.animate-slide-right{ animation: slide-right .2s ease; }
+
+/* ============================================================
+   CHANNEL / MESSAGE AREA
+   ============================================================ */
+.channel-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ============================================================
+   MODALS — slide up on mobile
+   ============================================================ */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.65);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-box {
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: fade-in .15s ease;
+}
+
+/* ============================================================
+   TASK BOARD COLUMNS
+   ============================================================ */
+.task-board-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 20px;
+  align-content: start;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* ============================================================
+   THREAD PANEL
+   ============================================================ */
+.thread-panel {
+  width: 320px;
+  border-left: 1px solid #2a2d31;
+  background: var(--bg1);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  animation: slide-right .2s ease;
+}
+
+/* ============================================================
+   RESPONSIVE MEDIA QUERIES
+   ============================================================ */
+
+/* Tablet (≤900px): hide workspace bar, narrow sidebar */
+@media (max-width: 900px) {
+  :root { --ws-bar-w: 0px; --sidebar-w: 220px; }
+  .app-ws-bar { display: none; }
+}
+
+/* Mobile (≤680px): sidebar is a drawer, show bottom nav */
+@media (max-width: 680px) {
   :root {
-    --workspace-bar-width: 0px;
-    --sidebar-width: 280px;
+    --sidebar-w: 280px;
+    --mobile-nav-h: 56px;
   }
 
-  .app-workspace-bar {
-    display: none;
-  }
-
+  /* Sidebar becomes a drawer */
   .app-sidebar {
     position: fixed;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    z-index: 50;
+    left: 0; top: 0; bottom: 0;
     transform: translateX(-100%);
+    border-right: none;
+    box-shadow: 4px 0 24px rgba(0,0,0,.5);
+  }
+  .sidebar-open .app-sidebar {
+    transform: translateX(0);
+  }
+  .sidebar-open .sidebar-overlay {
+    display: block;
   }
 
+  /* Main takes full width */
   .app-main {
     width: 100%;
+    padding-bottom: var(--mobile-nav-h);
   }
 
-  .mobile-nav {
-    display: flex;
+  /* Bottom nav visible */
+  .mobile-nav { display: flex; }
+
+  /* Thread panel is full screen overlay on mobile */
+  .thread-panel {
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 60px;
-    background: #222529;
-    border-top: 1px solid #3f4348;
-    z-index: 30;
-    align-items: stretch;
-  }
-
-  .mobile-nav-btn {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    background: none;
-    border: none;
-    color: #72767d;
-    cursor: pointer;
-    font-size: 10px;
-    font-family: inherit;
-    padding: 6px 0;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .mobile-nav-btn.active { color: #4a90d9; }
-  .mobile-nav-btn svg { width: 20px; height: 20px; }
-
-  /* Make message area fill above bottom nav */
-  .app-main .channel-area { padding-bottom: 60px; }
-
-  /* Thread panel full screen on mobile */
-  .thread-panel-mobile {
-    position: fixed !important;
-    inset: 0 !important;
+    inset: 0;
     width: 100% !important;
     z-index: 60;
+    border-left: none;
+    animation: slide-up .2s ease;
   }
 
-  /* Composer mobile */
-  .message-composer {
-    position: sticky;
-    bottom: 60px;
-  }
-
-  /* Modals full screen on mobile */
-  .modal-fullscreen-mobile {
-    width: 100% !important;
-    max-width: 100% !important;
-    margin: 0 !important;
-    border-radius: 16px 16px 0 0 !important;
-    position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    max-height: 90vh !important;
-    overflow-y: auto !important;
-  }
-
-  /* Task board mobile - single column */
+  /* Task board single column */
   .task-board-grid {
     grid-template-columns: 1fr !important;
+    padding: 12px;
+    gap: 12px;
   }
 
-  /* Diagram page - add scroll */
-  .diagram-canvas {
-    overflow: auto !important;
+  /* Modals slide up from bottom */
+  .modal-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .modal-box {
+    border-radius: 20px 20px 0 0;
+    max-width: 100%;
+    max-height: 92vh;
+    animation: slide-up .2s ease;
+    padding: 20px 20px 32px;
   }
 
-  /* Header compress */
-  .channel-header-right {
-    gap: 4px !important;
+  /* Channel header — compact */
+  .channel-header-members { display: none !important; }
+  .channel-header-desc    { display: none !important; }
+
+  /* Composer padding */
+  .message-composer-wrap { padding: 0 8px 8px; }
+
+  /* Huddle / video modal full screen on mobile */
+  .huddle-modal {
+    padding: 0 !important;
+    inset: 0 !important;
   }
-  .channel-header-right .member-faces {
-    display: none;
+  .huddle-modal > div {
+    max-width: 100% !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    border-radius: 0 !important;
+    max-height: none !important;
   }
 }
 
-@media (max-width: 480px) {
+/* Tiny screens (≤380px) */
+@media (max-width: 380px) {
   body { font-size: 13px; }
-
-  .channel-header-right .huddle-btn span:last-child {
-    display: none;
-  }
-
-  /* Hide some header buttons on very small screens */
-  .channel-header-pin,
-  .channel-header-search {
-    display: none !important;
-  }
+  .mobile-nav-btn { font-size: 9px; }
 }
 
-/* Prevent iOS zoom on input focus */
-@media (max-width: 768px) {
-  input, textarea, select {
+/* Prevent iOS input zoom */
+@media (max-width: 680px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea, select {
     font-size: 16px !important;
   }
+}
+
+/* ============================================================
+   MISC UTILITIES
+   ============================================================ */
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+/* Audio player styling */
+audio {
+  width: 100%;
+  height: 32px;
+  outline: none;
+}
+audio::-webkit-media-controls-panel {
+  background: var(--bg2);
 }
