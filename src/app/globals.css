@@ -363,3 +363,85 @@ audio {
 audio::-webkit-media-controls-panel {
   background: var(--bg2);
 }
+
+/* ============================================================
+   DIAGRAM TOOL - MOBILE
+   ============================================================ */
+.diagram-label-hide { display: none; }
+
+@media (min-width: 600px) {
+  .diagram-label-hide { display: inline; }
+}
+
+/* Diagram canvas scrolls on mobile */
+@media (max-width: 680px) {
+  .diagram-toolbar { flex-wrap: wrap; gap: 4px !important; }
+  .diagram-toolbar .template-row { order: -1; width: 100%; }
+}
+
+/* ============================================================
+   MESSAGE SEARCH BAR
+   ============================================================ */
+.msg-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #222529;
+  border-bottom: 1px solid #2a2d31;
+}
+.msg-search-input {
+  flex: 1;
+  background: #2c2f33;
+  border: 1px solid #3f4348;
+  border-radius: 6px;
+  padding: 6px 10px 6px 30px;
+  color: #f2f3f5;
+  font-size: 13px;
+  outline: none;
+  font-family: inherit;
+}
+.msg-search-input:focus {
+  border-color: #4a90d9;
+}
+
+/* ============================================================
+   CHANNEL HEADER - CLEAN
+   ============================================================ */
+.channel-header {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  height: 48px;
+  border-bottom: 1px solid #2a2d31;
+  background: #222529;
+  flex-shrink: 0;
+  gap: 10px;
+}
+.channel-header-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 15px;
+  color: #f2f3f5;
+  flex: 1;
+  min-width: 0;
+}
+.channel-header-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.channel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .channel-header { padding: 0 10px; height: 44px; }
+  .channel-desc-row { display: none; }
+  .member-faces-row { display: none; }
+}

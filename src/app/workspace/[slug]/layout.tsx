@@ -16,42 +16,24 @@ export default async function WorkspaceLayout({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  // Get workspace
   const { data: workspace } = await supabase
-    .from('workspaces')
-    .select('*')
-    .eq('slug', slug)
-    .single()
-
+    .from('workspaces').select('*').eq('slug', slug).single()
   if (!workspace) redirect('/workspace/new')
 
-  // Check membership
   const { data: membership } = await supabase
-    .from('workspace_members')
-    .select('*')
-    .eq('workspace_id', workspace.id)
-    .eq('user_id', user.id)
-    .single()
-
+    .from('workspace_members').select('*')
+    .eq('workspace_id', workspace.id).eq('user_id', user.id).single()
   if (!membership) redirect('/workspace/new')
 
-  // Get all workspaces for switcher
+  // All workspaces for switcher
   const { data: allWorkspaces } = await supabase
     .from('workspace_members')
     .select('workspaces(id, name, slug, icon_color, icon_letter)')
     .eq('user_id', user.id)
 
-  // Get channels
-  const { data: channels } = await supabase
-    .from('channels')
-    .select('*, channel_members!inner(user_id)')
-    .eq('workspace_id', workspace.id)
-    .eq('channel_members.user_id', user.id)
-    .eq('is_archived', false)
-    .order('name')
-
-  // Get all workspace channels (for browsing)
-  const { data: allChannels } = await supabase
+  // ALL public channels in this workspace (not just ones user joined)
+  // User auto-joins public channels when they open them
+  const { data: allPublicChannels } = await supabase
     .from('channels')
     .select('*')
     .eq('workspace_id', workspace.id)
@@ -59,25 +41,46 @@ export default async function WorkspaceLayout({
     .eq('is_archived', false)
     .order('name')
 
-  // Get DMs (conversations)
+  // Private channels the user is a member of
+  const { data: privateChannels } = await supabase
+    .from('channel_members')
+    .select('channels!inner(*)')
+    .eq('user_id', user.id)
+    .eq('channels.workspace_id', workspace.id)
+    .eq('channels.is_private', true)
+    .eq('channels.is_archived', false)
+
+  // Merge: all public + user's private channels, deduplicated
+  const publicList = allPublicChannels || []
+  const privateList = (privateChannels || [])
+    .map((m: Record<string, unknown>) => m.channels as Record<string, unknown>)
+    .filter(Boolean)
+  const channelMap = new Map<string, Record<string, unknown>>()
+  ;[...publicList, ...privateList].forEach(c => { if (c?.id) channelMap.set(String(c.id), c) })
+  const channels = Array.from(channelMap.values()).sort((a, b) =>
+    String(a.name).localeCompare(String(b.name))
+  )
+
+  // All DM conversations for this user (across workspace)
   const { data: conversations } = await supabase
     .from('conversation_members')
     .select(`
       conversations(
-        id, is_group, name, created_at,
+        id, is_group, name, created_at, workspace_id,
         conversation_members(user_id, profiles(id, full_name, username, avatar_url, status))
       )
     `)
     .eq('user_id', user.id)
 
-  // Get current user profile
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
+  // Filter to this workspace only
+  const wsConversations = (conversations || []).filter(m => {
+    const conv = (m as Record<string, unknown>).conversations as Record<string, unknown>
+    return conv?.workspace_id === workspace.id
+  })
 
-  // Get workspace members
+  const { data: profile } = await supabase
+    .from('profiles').select('*').eq('id', user.id).single()
+
   const { data: members } = await supabase
     .from('workspace_members')
     .select('*, profiles(id, full_name, username, avatar_url, status, email)')
@@ -85,15 +88,15 @@ export default async function WorkspaceLayout({
 
   const workspaceList = (allWorkspaces || [])
     .map((m: Record<string, unknown>) => m.workspaces as Record<string, unknown>)
-    .filter((w): w is Record<string, unknown> => w !== null && w !== undefined)
+    .filter((w): w is Record<string, unknown> => Boolean(w))
 
   return (
     <WorkspaceClient
       workspace={workspace}
       workspaces={workspaceList}
-      channels={channels || []}
-      allChannels={allChannels || []}
-      conversations={conversations || []}
+      channels={channels}
+      allChannels={channels}
+      conversations={wsConversations}
       profile={profile}
       members={members || []}
       membership={membership}

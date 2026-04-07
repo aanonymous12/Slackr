@@ -264,7 +264,7 @@ export default function ArchitectureDiagram() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#1a1d21', color: '#f2f3f5', overflow: 'hidden' }}>
       {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: '#222529', borderBottom: '1px solid #2a2d31', flexWrap: 'wrap', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: '#222529', borderBottom: '1px solid #2a2d31', flexWrap: 'wrap', flexShrink: 0, minHeight: 52 }}>
         {/* Templates */}
         <div style={{ display: 'flex', gap: 6, marginRight: 8 }}>
           <span style={{ fontSize: 12, color: '#72767d', alignSelf: 'center' }}>Template:</span>
@@ -285,7 +285,7 @@ export default function ArchitectureDiagram() {
               title={`Add ${nt.label}`}
               style={{ background: '#2c2f33', border: `1px solid ${nt.color}40`, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4, color: nt.color }}>
               <span>{nt.icon}</span>
-              <span style={{ fontSize: 11, display: 'none' }}>{nt.label}</span>
+              <span style={{ fontSize: 11 }} className="diagram-label-hide">{nt.label}</span>
             </button>
           ))}
         </div>
@@ -320,10 +320,10 @@ export default function ArchitectureDiagram() {
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Canvas */}
-        <div ref={containerRef} style={{ flex: 1, overflow: 'hidden', position: 'relative', cursor: connecting ? 'crosshair' : panning ? 'grabbing' : 'default' }}>
+        <div ref={containerRef} style={{ flex: 1, overflow: 'auto', position: 'relative', cursor: connecting ? 'crosshair' : panning ? 'grabbing' : 'default', WebkitOverflowScrolling: 'touch' as unknown as undefined }}>
           <svg
             ref={svgRef}
-            style={{ width: '100%', height: '100%', background: '#1a1d21' }}
+            style={{ width: '100%', height: '100%', minWidth: 600, minHeight: 500, background: '#1a1d21' }}
             onMouseMove={handleMouseMove}
             onMouseDown={handleSvgMouseDown}
             onMouseUp={handleMouseUp}

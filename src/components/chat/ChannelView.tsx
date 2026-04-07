@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Hash, Lock, Users, Pin, Search, Trash2, ClipboardList } from 'lucide-react'
+import { Hash, Lock, Users, Search, Trash2, X } from 'lucide-react'
 import MessageList from './MessageList'
 import MessageComposer from './MessageComposer'
 import ThreadPanel from './ThreadPanel'
@@ -28,6 +28,8 @@ export default function ChannelView({ channel, initialMessages, channelMembers, 
   const [typingUsers, setTypingUsers] = useState<string[]>([])
   const [deleting, setDeleting] = useState(false)
   const [showVideo, setShowVideo] = useState(false)
+  const [searchMsg, setSearchMsg] = useState('')
+  const [showSearch, setShowSearch] = useState(false)
   const [activeTab, setActiveTab] = useState<'chat' | 'tasks'>('chat')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -162,9 +164,9 @@ export default function ChannelView({ channel, initialMessages, channelMembers, 
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {/* Member faces */}
-          <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={() => setShowMembers(!showMembers)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} className="channel-header-actions">
+          {/* Member count — hidden on small mobile */}
+          <div className="member-faces-row" style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={() => setShowMembers(!showMembers)}>
             <div style={{ display: 'flex' }}>
               {members.slice(0, 4).map((m, i) => (
                 <div key={i} style={{ width: 26, height: 26, borderRadius: '50%', border: '2px solid #222529', marginLeft: i > 0 ? -8 : 0, background: getAvatarColor(String(m.profiles?.id || i)), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, zIndex: 4 - i }}>
@@ -185,8 +187,6 @@ export default function ChannelView({ channel, initialMessages, channelMembers, 
             {showVideo ? 'In Huddle' : 'Start Huddle'}
           </button>
 
-          <button style={hdrBtn}><Search size={16} /></button>
-          <button style={hdrBtn}><Pin size={16} /></button>
           <button style={{ ...hdrBtn, background: showMembers ? 'rgba(74,144,217,.15)' : 'transparent', color: showMembers ? '#4a90d9' : '#b9bbbe' }} onClick={() => setShowMembers(!showMembers)}><Users size={16} /></button>
 
           {/* Delete button - only shown for non-protected channels */}
@@ -200,6 +200,24 @@ export default function ChannelView({ channel, initialMessages, channelMembers, 
         </div>
       </div>
 
+      {showSearch && (
+        <div style={{ padding: '6px 16px', background: '#1a1d21', borderBottom: '1px solid #2a2d31', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <Search size={14} style={{ color: '#72767d', flexShrink: 0 }} />
+          <input
+            autoFocus
+            value={searchMsg}
+            onChange={e => setSearchMsg(e.target.value)}
+            placeholder={`Search messages in #${ch.name}…`}
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#f2f3f5', fontSize: '14px', fontFamily: 'inherit' }}
+          />
+          {searchMsg && (
+            <span style={{ fontSize: '12px', color: '#72767d' }}>
+              {messages.filter(m => String((m as Record<string,unknown>).content||'').toLowerCase().includes(searchMsg.toLowerCase())).length} results
+            </span>
+          )}
+          <button onClick={() => { setShowSearch(false); setSearchMsg('') }} style={{ background: 'none', border: 'none', color: '#72767d', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><X size={14} /></button>
+        </div>
+      )}
       {huddle && (
         <HuddleBar channelId={ch.id} currentUserId={currentUserId} huddle={huddle}
           onLeave={async () => {
@@ -217,7 +235,7 @@ export default function ChannelView({ channel, initialMessages, channelMembers, 
           <TaskBoard workspaceId={ch.workspace_id} currentUserId={currentUserId} members={channelMembers} />
         ) : (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <MessageList messages={messages} currentUserId={currentUserId}
+            <MessageList messages={searchMsg ? messages.filter(m => String((m as Record<string,unknown>).content || '').toLowerCase().includes(searchMsg.toLowerCase())) : messages} currentUserId={currentUserId}
               onThreadOpen={setThreadMessage}
               onReact={async (messageId, emoji) => {
                 const msg = messages.find(m => (m as Record<string,unknown>).id === messageId) as Record<string,unknown>
@@ -236,7 +254,7 @@ export default function ChannelView({ channel, initialMessages, channelMembers, 
                 <span><strong>{typingUsers.join(', ')}</strong> {typingUsers.length === 1 ? 'is' : 'are'} typing…</span>
               </div>
             )}
-            <MessageComposer placeholder={`Message #${ch.name}`} onSend={sendMessage} onTyping={sendTypingSignal} currentUserId={currentUserId} />
+            <MessageComposer placeholder={`Message #${ch.name}`} onSend={sendMessage} onTyping={sendTypingSignal} currentUserId={currentUserId} members={channelMembers} workspaceId={ch.workspace_id} channelId={ch.id} channelName={ch.name} />
           </div>
         )}
 
