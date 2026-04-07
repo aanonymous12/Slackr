@@ -7,25 +7,30 @@ export default async function WorkspacePage({ params }: { params: Promise<{ slug
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { data: workspace } = await supabase.from('workspaces').select('id').eq('slug', slug).single()
-  if (!workspace) redirect('/workspace/new')
+  const { data: workspace } = await supabase
+    .from('workspaces').select('id').eq('slug', slug).single()
+  if (!workspace) redirect('/')
 
-  const { data: memberships } = await supabase
-    .from('channel_members')
-    .select('channel_id, channels(id, name, workspace_id)')
-    .eq('user_id', user.id)
+  // Find first public channel (general first, then alphabetical)
+  const { data: channels } = await supabase
+    .from('channels')
+    .select('id, name')
+    .eq('workspace_id', workspace.id)
+    .eq('is_private', false)
+    .eq('is_archived', false)
+    .order('name')
 
-  const firstChannel = (memberships || [])
-    .map(m => m.channels as unknown as { id: string; name: string; workspace_id: string } | null)
-    .find(c => c && c.workspace_id === workspace.id)
-
-  if (firstChannel) redirect(`/workspace/${slug}/channel/${firstChannel.id}`)
+  if (channels?.length) {
+    // Prefer 'general', otherwise first channel
+    const general = channels.find(c => c.name === 'general') || channels[0]
+    redirect(`/workspace/${slug}/channel/${general.id}`)
+  }
 
   return (
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#222529', color: '#72767d', flexDirection: 'column', gap: 12 }}>
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#222529', flexDirection: 'column', gap: 12, color: '#72767d' }}>
       <div style={{ fontSize: 48 }}>👋</div>
-      <h2 style={{ color: '#f2f3f5', fontWeight: 700, margin: 0 }}>Welcome to your workspace!</h2>
-      <p style={{ margin: 0 }}>You haven&apos;t joined any channels yet.</p>
+      <h2 style={{ color: '#f2f3f5', fontWeight: 700, margin: 0 }}>Welcome to {slug}!</h2>
+      <p style={{ margin: 0, fontSize: 14 }}>No channels found yet.</p>
     </div>
   )
 }

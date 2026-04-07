@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
+import { adminClient } from '@/lib/admin'
 import { redirect } from 'next/navigation'
 import WorkspaceClient from './WorkspaceClient'
 
@@ -16,23 +17,46 @@ export default async function WorkspaceLayout({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
+  // Get workspace
   const { data: workspace } = await supabase
     .from('workspaces').select('*').eq('slug', slug).single()
   if (!workspace) redirect('/workspace/new')
 
-  const { data: membership } = await supabase
+  // Check membership — if not a member, check if they have a pending invite
+  // or if the workspace exists and they just need to be added
+  let { data: membership } = await supabase
     .from('workspace_members').select('*')
     .eq('workspace_id', workspace.id).eq('user_id', user.id).single()
-  if (!membership) redirect('/workspace/new')
 
-  // All workspaces for switcher
+  if (!membership) {
+    // Not a member — redirect to home which will pick their actual workspace
+    redirect('/')
+  }
+
+  // Ensure user is joined to all public channels (auto-join on workspace visit)
+  const admin = adminClient()
+  const { data: publicChannels } = await admin
+    .from('channels')
+    .select('id')
+    .eq('workspace_id', workspace.id)
+    .eq('is_private', false)
+    .eq('is_archived', false)
+
+  if (publicChannels?.length) {
+    // Upsert membership for all public channels — safe no-op if already joined
+    await admin.from('channel_members').upsert(
+      publicChannels.map(c => ({ channel_id: c.id, user_id: user.id })),
+      { onConflict: 'channel_id,user_id', ignoreDuplicates: true }
+    )
+  }
+
+  // All workspaces the user belongs to (for switcher)
   const { data: allWorkspaces } = await supabase
     .from('workspace_members')
     .select('workspaces(id, name, slug, icon_color, icon_letter)')
     .eq('user_id', user.id)
 
-  // ALL public channels in this workspace (not just ones user joined)
-  // User auto-joins public channels when they open them
+  // ALL public + user's private channels
   const { data: allPublicChannels } = await supabase
     .from('channels')
     .select('*')
@@ -41,8 +65,7 @@ export default async function WorkspaceLayout({
     .eq('is_archived', false)
     .order('name')
 
-  // Private channels the user is a member of
-  const { data: privateChannels } = await supabase
+  const { data: privateChannelRows } = await supabase
     .from('channel_members')
     .select('channels!inner(*)')
     .eq('user_id', user.id)
@@ -50,18 +73,19 @@ export default async function WorkspaceLayout({
     .eq('channels.is_private', true)
     .eq('channels.is_archived', false)
 
-  // Merge: all public + user's private channels, deduplicated
-  const publicList = allPublicChannels || []
-  const privateList = (privateChannels || [])
+  const privateList = (privateChannelRows || [])
     .map((m: Record<string, unknown>) => m.channels as Record<string, unknown>)
     .filter(Boolean)
+
   const channelMap = new Map<string, Record<string, unknown>>()
-  ;[...publicList, ...privateList].forEach(c => { if (c?.id) channelMap.set(String(c.id), c) })
+  ;[...(allPublicChannels || []), ...privateList].forEach(c => {
+    if (c?.id) channelMap.set(String(c.id), c)
+  })
   const channels = Array.from(channelMap.values()).sort((a, b) =>
     String(a.name).localeCompare(String(b.name))
   )
 
-  // All DM conversations for this user (across workspace)
+  // All DM conversations for this workspace
   const { data: conversations } = await supabase
     .from('conversation_members')
     .select(`
@@ -72,7 +96,6 @@ export default async function WorkspaceLayout({
     `)
     .eq('user_id', user.id)
 
-  // Filter to this workspace only
   const wsConversations = (conversations || []).filter(m => {
     const conv = (m as Record<string, unknown>).conversations as Record<string, unknown>
     return conv?.workspace_id === workspace.id
