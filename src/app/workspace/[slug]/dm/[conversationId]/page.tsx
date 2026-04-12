@@ -12,37 +12,33 @@ export default async function DMPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  // Verify membership
   const { data: membership } = await supabase
-    .from('conversation_members')
-    .select('*')
-    .eq('conversation_id', conversationId)
-    .eq('user_id', user.id)
-    .single()
-
+    .from('conversation_members').select('*')
+    .eq('conversation_id', conversationId).eq('user_id', user.id).single()
   if (!membership) redirect(`/workspace/${slug}`)
 
-  // Update last_read
   await supabase.from('conversation_members')
     .update({ last_read_at: new Date().toISOString() })
-    .eq('conversation_id', conversationId)
-    .eq('user_id', user.id)
+    .eq('conversation_id', conversationId).eq('user_id', user.id)
 
-  // Load conversation + members
   const { data: conversation } = await supabase
     .from('conversations')
     .select('*, conversation_members(user_id, profiles(id, full_name, username, avatar_url, status))')
-    .eq('id', conversationId)
-    .single()
+    .eq('id', conversationId).single()
 
-  // Load messages
+  // Get workspace for this conversation (for @mention emails)
+  const workspaceId = conversation?.workspace_id as string | undefined
+
+  // Get workspace members for @mention autocomplete
+  const { data: workspaceMembers } = workspaceId
+    ? await supabase.from('workspace_members')
+        .select('*, profiles(id, full_name, username, avatar_url, status)')
+        .eq('workspace_id', workspaceId)
+    : { data: [] }
+
   const { data: messages } = await supabase
     .from('messages')
-    .select(`
-      *,
-      sender:profiles!sender_id(id, full_name, username, avatar_url, status),
-      reactions(id, emoji, user_id, profiles(id, full_name))
-    `)
+    .select('*, sender:profiles!sender_id(id, full_name, username, avatar_url, status), reactions(id, emoji, user_id, profiles(id, full_name))')
     .eq('conversation_id', conversationId)
     .is('thread_parent_id', null)
     .eq('is_deleted', false)
@@ -55,6 +51,8 @@ export default async function DMPage({
       initialMessages={(messages || []).reverse()}
       currentUserId={user.id}
       workspaceSlug={slug}
+      workspaceId={workspaceId}
+      workspaceMembers={workspaceMembers || []}
     />
   )
 }

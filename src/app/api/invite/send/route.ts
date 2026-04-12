@@ -93,6 +93,7 @@ export async function POST(req: NextRequest) {
       workspaceName: workspace.name,
       inviteUrl,
       role: role || 'member',
+      appUrl,
     })
   } catch (emailErr) {
     // Delete the invite if email fails so we don't leave orphaned records

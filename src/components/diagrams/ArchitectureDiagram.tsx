@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Download, Trash2, Plus, ZoomIn, ZoomOut, RotateCcw, Save } from 'lucide-react'
+import { Download, Trash2, Plus, ZoomIn, ZoomOut, RotateCcw, Save, Upload, FolderOpen } from 'lucide-react'
 
 type NodeType = 'server' | 'database' | 'client' | 'cloud' | 'api' | 'queue' | 'cache' | 'cdn' | 'loadbalancer' | 'microservice' | 'storage' | 'user'
 type ConnectorStyle = 'solid' | 'dashed' | 'dotted'
@@ -96,6 +96,7 @@ export default function ArchitectureDiagram() {
   const [saved, setSaved] = useState(false)
   const svgRef = useRef<SVGSVGElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Convert screen coords → SVG canvas coords (accounts for scroll + zoom)
   function screenToCanvas(clientX: number, clientY: number) {
@@ -196,6 +197,53 @@ export default function ArchitectureDiagram() {
     const to = getNodeCenter(conn.to)
     const dx = to.x - from.x
     return `M ${from.x} ${from.y} C ${from.x + dx * 0.5} ${from.y}, ${to.x - dx * 0.3} ${to.y}, ${to.x} ${to.y}`
+  }
+
+  // Export diagram as JSON file
+  function exportJSON() {
+    const data = { nodes, connections, version: 1, exportedAt: new Date().toISOString() }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `diagram-${Date.now()}.slackr.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  // Import diagram from JSON file
+  function importJSON(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target?.result as string)
+        if (data.nodes && Array.isArray(data.nodes)) {
+          setNodes(data.nodes)
+          setConnections(data.connections || [])
+          setSelectedNode(null)
+          setSelectedConn(null)
+          // Scroll to content
+          setTimeout(() => {
+            if (data.nodes.length > 0) {
+              const minX = Math.min(...data.nodes.map((n: DiagramNode) => n.x))
+              const minY = Math.min(...data.nodes.map((n: DiagramNode) => n.y))
+              if (scrollContainerRef.current) {
+                scrollContainerRef.current.scrollLeft = Math.max(0, minX * zoom - 60)
+                scrollContainerRef.current.scrollTop  = Math.max(0, minY * zoom - 60)
+              }
+            }
+          }, 100)
+        } else {
+          alert('Invalid diagram file. Please use a .slackr.json file exported from this tool.')
+        }
+      } catch {
+        alert('Could not read file. Make sure it is a valid .slackr.json diagram file.')
+      }
+    }
+    reader.readAsText(file)
+    // Reset so same file can be re-imported
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   function exportSVG() {
@@ -301,8 +349,16 @@ export default function ArchitectureDiagram() {
           <span style={{ fontSize: 11, color: '#72767d', minWidth: 32, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
           <button onClick={() => setZoom(z => Math.max(0.25, +(z - 0.1).toFixed(1)))} style={tb}><ZoomOut size={14} /></button>
           <button onClick={() => setZoom(1)} style={tb} title="Reset zoom"><RotateCcw size={14} /></button>
-          <button onClick={saveLocally} style={{ ...tb, color: saved ? '#2eb67d' : '#b9bbbe' }} title="Save (Ctrl+S)"><Save size={14} /></button>
-          <button onClick={exportSVG} style={{ ...tb, background: '#4a90d9', color: '#fff', border: 'none' }} title="Export SVG"><Download size={14} /></button>
+          <button onClick={saveLocally} style={{ ...tb, color: saved ? '#2eb67d' : '#b9bbbe' }} title="Save to browser (Ctrl+S)"><Save size={14} /></button>
+          <button onClick={exportJSON} style={{ ...tb, background: '#2eb67d', color: '#fff', border: 'none' }} title="Export diagram as .json file (can reimport later)">
+            <Download size={14} />
+            <span style={{ fontSize: 10, marginLeft: 3 }}>Export</span>
+          </button>
+          <button onClick={() => fileInputRef.current?.click()} style={{ ...tb, background: '#e8912d', color: '#fff', border: 'none' }} title="Import diagram from .json file">
+            <Upload size={14} />
+            <span style={{ fontSize: 10, marginLeft: 3 }}>Import</span>
+          </button>
+          <button onClick={exportSVG} style={{ ...tb, background: '#4a90d9', color: '#fff', border: 'none' }} title="Export as SVG image"><Download size={14} /></button>
         </div>
       </div>
 
@@ -523,6 +579,9 @@ export default function ArchitectureDiagram() {
           </div>
         </div>
       )}
+
+      {/* Hidden file input for import */}
+      <input ref={fileInputRef} type="file" accept=".json,.slackr.json" style={{ display: 'none' }} onChange={importJSON} />
 
       {/* Help bar */}
       <div style={{ padding: '4px 12px', background: '#0f1113', borderTop: '1px solid #2a2d31', display: 'flex', gap: 16, flexShrink: 0, overflowX: 'auto' }}>

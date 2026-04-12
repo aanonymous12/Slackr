@@ -17,10 +17,11 @@ interface Props {
   currentUserId: string
   workspaceSlug: string
   activeHuddle: Record<string, unknown> | null
+  autoJoinHuddle?: boolean
 }
 
 export default function ChannelView({
-  channel, initialMessages, channelMembers, currentUserId, workspaceSlug, activeHuddle
+  channel, initialMessages, channelMembers, currentUserId, workspaceSlug, activeHuddle, autoJoinHuddle
 }: Props) {
   const supabase = createClient()
   const [messages, setMessages] = useState(initialMessages)
@@ -29,7 +30,7 @@ export default function ChannelView({
   const [showMembers, setShowMembers] = useState(false)
   const [typingUsers, setTypingUsers] = useState<string[]>([])
   const [deleting, setDeleting] = useState(false)
-  const [showVideo, setShowVideo] = useState(false)
+  const [showVideo, setShowVideo] = useState(autoJoinHuddle ?? false)
   const [searchMsg, setSearchMsg] = useState('')
   const [showSearch, setShowSearch] = useState(false)
   const [activeTab, setActiveTab] = useState<'chat' | 'tasks'>('chat')
